@@ -16,7 +16,10 @@ export default function Home() {
   useEffect(() => {
     const fetchBalance = async () => {
       try {
-        const res = await fetch("/api/balance");
+        // Add cache-busting timestamp
+        const res = await fetch(`/api/balance?t=${Date.now()}`, {
+          cache: "no-store",
+        });
         const data = await res.json();
         if (data.success) {
           setBalance(data);

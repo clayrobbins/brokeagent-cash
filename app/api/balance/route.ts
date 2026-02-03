@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { CASH_MINT } from "@/lib/constants";
 
+// Disable Vercel caching for this route
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const FAUCET_WALLET = "9ZWCK5JzfQjy2WUS6csCBPj9aeyZzBZyUhjJ9RaTnKz6";
 
 export async function GET() {
@@ -30,13 +34,20 @@ export async function GET() {
       cashAmount = parsed.info.tokenAmount.uiAmount || 0;
     }
 
-    return NextResponse.json({
-      success: true,
-      sol: solAmount,
-      cash: cashAmount,
-      solFormatted: solAmount.toFixed(4),
-      cashFormatted: cashAmount.toFixed(2),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        sol: solAmount,
+        cash: cashAmount,
+        solFormatted: solAmount.toFixed(4),
+        cashFormatted: cashAmount.toFixed(2),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      }
+    );
   } catch (error) {
     console.error("Balance check error:", error);
     return NextResponse.json(
