@@ -77,9 +77,13 @@ export default function Home() {
             </div>
             <span className="text-gray-200 text-2xl">+</span>
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#9945FF] to-[#14F195] flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-xs">SOL</span>
-              </div>
+              <Image
+                src="/solana-logo.png"
+                alt="SOL"
+                width={44}
+                height={44}
+                className="rounded-full"
+              />
               <div>
                 <span className="text-3xl font-semibold text-gray-900">0.001</span>
                 <span className="text-lg text-gray-400 ml-1">SOL</span>
