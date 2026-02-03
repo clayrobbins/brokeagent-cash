@@ -12,6 +12,8 @@ import {
   createTransferInstruction,
   getAccount,
   TokenAccountNotFoundError,
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import bs58 from "bs58";
 import {
@@ -71,32 +73,40 @@ export async function sendCash(recipientAddress: string): Promise<string> {
   const faucetWallet = getFaucetWallet();
   const recipient = new PublicKey(recipientAddress);
 
-  // Get faucet's CASH token account
+  // Get faucet's CASH token account (Token-2022)
   const faucetTokenAccount = await getAssociatedTokenAddress(
     CASH_MINT,
-    faucetWallet.publicKey
+    faucetWallet.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
   );
 
-  // Get or create recipient's CASH token account
+  // Get or create recipient's CASH token account (Token-2022)
   const recipientTokenAccount = await getAssociatedTokenAddress(
     CASH_MINT,
-    recipient
+    recipient,
+    false,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
   );
 
   const transaction = new Transaction();
 
   // Check if recipient has a token account, if not create one
   try {
-    await getAccount(connection, recipientTokenAccount);
+    await getAccount(connection, recipientTokenAccount, "confirmed", TOKEN_2022_PROGRAM_ID);
   } catch (error) {
     if (error instanceof TokenAccountNotFoundError) {
-      // Create associated token account for recipient
+      // Create associated token account for recipient (Token-2022)
       transaction.add(
         createAssociatedTokenAccountInstruction(
           faucetWallet.publicKey, // payer
           recipientTokenAccount, // associated token account
           recipient, // owner
-          CASH_MINT // mint
+          CASH_MINT, // mint
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
         )
       );
     } else {
@@ -104,13 +114,15 @@ export async function sendCash(recipientAddress: string): Promise<string> {
     }
   }
 
-  // Add transfer instruction
+  // Add transfer instruction (Token-2022)
   transaction.add(
     createTransferInstruction(
       faucetTokenAccount, // source
       recipientTokenAccount, // destination
       faucetWallet.publicKey, // owner
-      CASH_AMOUNT // amount
+      CASH_AMOUNT, // amount
+      [], // multiSigners
+      TOKEN_2022_PROGRAM_ID
     )
   );
 
