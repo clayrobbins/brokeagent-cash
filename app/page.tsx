@@ -27,7 +27,7 @@ export default function Home() {
     };
 
     fetchBalance();
-    const interval = setInterval(fetchBalance, 30000); // Refresh every 30s
+    const interval = setInterval(fetchBalance, 5000); // Refresh every 5s
     return () => clearInterval(interval);
   }, []);
 
