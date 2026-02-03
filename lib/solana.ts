@@ -23,13 +23,21 @@ import {
   CASH_DECIMALS,
 } from "./constants";
 
-// Initialize connection and faucet wallet
+// Cache connection instance
+let connectionInstance: Connection | null = null;
+
 function getConnection(): Connection {
+  if (connectionInstance) return connectionInstance;
+
   const rpcUrl = process.env.SOLANA_RPC_URL;
   if (!rpcUrl) {
     throw new Error("SOLANA_RPC_URL environment variable not set");
   }
-  return new Connection(rpcUrl, "confirmed");
+  connectionInstance = new Connection(rpcUrl, {
+    commitment: "confirmed",
+    confirmTransactionInitialTimeout: 30000,
+  });
+  return connectionInstance;
 }
 
 function getFaucetWallet(): Keypair {
@@ -49,6 +57,82 @@ export function isValidSolanaAddress(address: string): boolean {
   }
 }
 
+// Combined function to send both SOL and CASH in one transaction
+export async function sendFaucetFunds(recipientAddress: string): Promise<{ solTx: string; cashTx: string }> {
+  const connection = getConnection();
+  const faucetWallet = getFaucetWallet();
+  const recipient = new PublicKey(recipientAddress);
+
+  // Get token accounts
+  const faucetTokenAccount = await getAssociatedTokenAddress(
+    CASH_MINT,
+    faucetWallet.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  const recipientTokenAccount = await getAssociatedTokenAddress(
+    CASH_MINT,
+    recipient,
+    false,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  const transaction = new Transaction();
+
+  // Add SOL transfer
+  transaction.add(
+    SystemProgram.transfer({
+      fromPubkey: faucetWallet.publicKey,
+      toPubkey: recipient,
+      lamports: SOL_AMOUNT_LAMPORTS,
+    })
+  );
+
+  // Check if recipient has a token account, if not create one
+  try {
+    await getAccount(connection, recipientTokenAccount, "confirmed", TOKEN_2022_PROGRAM_ID);
+  } catch (error) {
+    if (error instanceof TokenAccountNotFoundError) {
+      transaction.add(
+        createAssociatedTokenAccountInstruction(
+          faucetWallet.publicKey,
+          recipientTokenAccount,
+          recipient,
+          CASH_MINT,
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    } else {
+      throw error;
+    }
+  }
+
+  // Add CASH transfer with transfer hook handling
+  const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
+    connection,
+    faucetTokenAccount,
+    CASH_MINT,
+    recipientTokenAccount,
+    faucetWallet.publicKey,
+    BigInt(CASH_AMOUNT),
+    CASH_DECIMALS,
+    [],
+    "confirmed",
+    TOKEN_2022_PROGRAM_ID
+  );
+  transaction.add(transferInstruction);
+
+  // Send single transaction with both transfers
+  const signature = await sendAndConfirmTransaction(connection, transaction, [faucetWallet]);
+
+  return { solTx: signature, cashTx: signature };
+}
+
+// Keep old functions for backward compatibility
 export async function sendSol(recipientAddress: string): Promise<string> {
   const connection = getConnection();
   const faucetWallet = getFaucetWallet();
@@ -62,10 +146,7 @@ export async function sendSol(recipientAddress: string): Promise<string> {
     })
   );
 
-  const signature = await sendAndConfirmTransaction(connection, transaction, [
-    faucetWallet,
-  ]);
-
+  const signature = await sendAndConfirmTransaction(connection, transaction, [faucetWallet]);
   return signature;
 }
 
@@ -74,7 +155,6 @@ export async function sendCash(recipientAddress: string): Promise<string> {
   const faucetWallet = getFaucetWallet();
   const recipient = new PublicKey(recipientAddress);
 
-  // Get faucet's CASH token account (Token-2022)
   const faucetTokenAccount = await getAssociatedTokenAddress(
     CASH_MINT,
     faucetWallet.publicKey,
@@ -83,7 +163,6 @@ export async function sendCash(recipientAddress: string): Promise<string> {
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
 
-  // Get or create recipient's CASH token account (Token-2022)
   const recipientTokenAccount = await getAssociatedTokenAddress(
     CASH_MINT,
     recipient,
@@ -94,18 +173,16 @@ export async function sendCash(recipientAddress: string): Promise<string> {
 
   const transaction = new Transaction();
 
-  // Check if recipient has a token account, if not create one
   try {
     await getAccount(connection, recipientTokenAccount, "confirmed", TOKEN_2022_PROGRAM_ID);
   } catch (error) {
     if (error instanceof TokenAccountNotFoundError) {
-      // Create associated token account for recipient (Token-2022)
       transaction.add(
         createAssociatedTokenAccountInstruction(
-          faucetWallet.publicKey, // payer
-          recipientTokenAccount, // associated token account
-          recipient, // owner
-          CASH_MINT, // mint
+          faucetWallet.publicKey,
+          recipientTokenAccount,
+          recipient,
+          CASH_MINT,
           TOKEN_2022_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         )
@@ -115,25 +192,20 @@ export async function sendCash(recipientAddress: string): Promise<string> {
     }
   }
 
-  // Use the helper that automatically resolves transfer hook extra accounts
   const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
     connection,
-    faucetTokenAccount, // source
-    CASH_MINT, // mint
-    recipientTokenAccount, // destination
-    faucetWallet.publicKey, // owner/authority
-    BigInt(CASH_AMOUNT), // amount as bigint
-    CASH_DECIMALS, // decimals
-    [], // multiSigners
+    faucetTokenAccount,
+    CASH_MINT,
+    recipientTokenAccount,
+    faucetWallet.publicKey,
+    BigInt(CASH_AMOUNT),
+    CASH_DECIMALS,
+    [],
     "confirmed",
     TOKEN_2022_PROGRAM_ID
   );
-
   transaction.add(transferInstruction);
 
-  const signature = await sendAndConfirmTransaction(connection, transaction, [
-    faucetWallet,
-  ]);
-
+  const signature = await sendAndConfirmTransaction(connection, transaction, [faucetWallet]);
   return signature;
 }

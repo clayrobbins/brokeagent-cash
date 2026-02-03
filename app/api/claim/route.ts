@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isValidSolanaAddress, sendSol, sendCash } from "@/lib/solana";
+import { isValidSolanaAddress, sendFaucetFunds } from "@/lib/solana";
 import { hasClaimed, recordClaim } from "@/lib/db";
+
+export const maxDuration = 60; // Allow up to 60 seconds for Vercel Pro
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,11 +47,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send SOL first (needed for transaction fees)
-    const solTx = await sendSol(walletAddress);
-
-    // Send CASH tokens
-    const cashTx = await sendCash(walletAddress);
+    // Send SOL and CASH in a single transaction
+    const { solTx, cashTx } = await sendFaucetFunds(walletAddress);
 
     // Record the claim
     await recordClaim(walletAddress, solTx, cashTx);
