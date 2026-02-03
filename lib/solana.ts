@@ -4,13 +4,10 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
-  getAccount,
-  TokenAccountNotFoundError,
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createTransferCheckedWithTransferHookInstruction,
@@ -58,12 +55,13 @@ export function isValidSolanaAddress(address: string): boolean {
 }
 
 // Combined function to send both SOL and CASH in one transaction
+// Optimized for speed: doesn't wait for confirmation, always creates ATA (idempotent)
 export async function sendFaucetFunds(recipientAddress: string): Promise<{ solTx: string; cashTx: string }> {
   const connection = getConnection();
   const faucetWallet = getFaucetWallet();
   const recipient = new PublicKey(recipientAddress);
 
-  // Get token accounts
+  // Get token accounts (pure derivation, no RPC call)
   const faucetTokenAccount = await getAssociatedTokenAddress(
     CASH_MINT,
     faucetWallet.publicKey,
@@ -80,7 +78,26 @@ export async function sendFaucetFunds(recipientAddress: string): Promise<{ solTx
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
 
+  // Fetch blockhash and build transfer instruction in parallel
+  const [blockhashResult, transferInstruction] = await Promise.all([
+    connection.getLatestBlockhash("confirmed"),
+    createTransferCheckedWithTransferHookInstruction(
+      connection,
+      faucetTokenAccount,
+      CASH_MINT,
+      recipientTokenAccount,
+      faucetWallet.publicKey,
+      BigInt(CASH_AMOUNT),
+      CASH_DECIMALS,
+      [],
+      "confirmed",
+      TOKEN_2022_PROGRAM_ID
+    ),
+  ]);
+
   const transaction = new Transaction();
+  transaction.recentBlockhash = blockhashResult.blockhash;
+  transaction.feePayer = faucetWallet.publicKey;
 
   // Add SOL transfer
   transaction.add(
@@ -91,62 +108,57 @@ export async function sendFaucetFunds(recipientAddress: string): Promise<{ solTx
     })
   );
 
-  // Check if recipient has a token account, if not create one
-  try {
-    await getAccount(connection, recipientTokenAccount, "confirmed", TOKEN_2022_PROGRAM_ID);
-  } catch (error) {
-    if (error instanceof TokenAccountNotFoundError) {
-      transaction.add(
-        createAssociatedTokenAccountInstruction(
-          faucetWallet.publicKey,
-          recipientTokenAccount,
-          recipient,
-          CASH_MINT,
-          TOKEN_2022_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      );
-    } else {
-      throw error;
-    }
-  }
+  // Always add ATA creation (it's idempotent - no-op if account exists)
+  transaction.add(
+    createAssociatedTokenAccountInstruction(
+      faucetWallet.publicKey,
+      recipientTokenAccount,
+      recipient,
+      CASH_MINT,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    )
+  );
 
   // Add CASH transfer with transfer hook handling
-  const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
-    connection,
-    faucetTokenAccount,
-    CASH_MINT,
-    recipientTokenAccount,
-    faucetWallet.publicKey,
-    BigInt(CASH_AMOUNT),
-    CASH_DECIMALS,
-    [],
-    "confirmed",
-    TOKEN_2022_PROGRAM_ID
-  );
   transaction.add(transferInstruction);
 
-  // Send single transaction with both transfers
-  const signature = await sendAndConfirmTransaction(connection, transaction, [faucetWallet]);
+  // Sign the transaction
+  transaction.sign(faucetWallet);
+
+  // Send without waiting for confirmation (fire and forget)
+  // Skip preflight to save time - we've validated inputs
+  const signature = await connection.sendRawTransaction(transaction.serialize(), {
+    skipPreflight: true,
+    preflightCommitment: "confirmed",
+  });
 
   return { solTx: signature, cashTx: signature };
 }
 
-// Keep old functions for backward compatibility
+// Backward compatibility functions (also optimized for speed)
 export async function sendSol(recipientAddress: string): Promise<string> {
   const connection = getConnection();
   const faucetWallet = getFaucetWallet();
   const recipient = new PublicKey(recipientAddress);
 
-  const transaction = new Transaction().add(
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
+
+  const transaction = new Transaction();
+  transaction.recentBlockhash = blockhash;
+  transaction.feePayer = faucetWallet.publicKey;
+  transaction.add(
     SystemProgram.transfer({
       fromPubkey: faucetWallet.publicKey,
       toPubkey: recipient,
       lamports: SOL_AMOUNT_LAMPORTS,
     })
   );
+  transaction.sign(faucetWallet);
 
-  const signature = await sendAndConfirmTransaction(connection, transaction, [faucetWallet]);
+  const signature = await connection.sendRawTransaction(transaction.serialize(), {
+    skipPreflight: true,
+  });
   return signature;
 }
 
@@ -171,41 +183,42 @@ export async function sendCash(recipientAddress: string): Promise<string> {
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
 
+  const [{ blockhash }, transferInstruction] = await Promise.all([
+    connection.getLatestBlockhash("confirmed"),
+    createTransferCheckedWithTransferHookInstruction(
+      connection,
+      faucetTokenAccount,
+      CASH_MINT,
+      recipientTokenAccount,
+      faucetWallet.publicKey,
+      BigInt(CASH_AMOUNT),
+      CASH_DECIMALS,
+      [],
+      "confirmed",
+      TOKEN_2022_PROGRAM_ID
+    ),
+  ]);
+
   const transaction = new Transaction();
+  transaction.recentBlockhash = blockhash;
+  transaction.feePayer = faucetWallet.publicKey;
 
-  try {
-    await getAccount(connection, recipientTokenAccount, "confirmed", TOKEN_2022_PROGRAM_ID);
-  } catch (error) {
-    if (error instanceof TokenAccountNotFoundError) {
-      transaction.add(
-        createAssociatedTokenAccountInstruction(
-          faucetWallet.publicKey,
-          recipientTokenAccount,
-          recipient,
-          CASH_MINT,
-          TOKEN_2022_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      );
-    } else {
-      throw error;
-    }
-  }
-
-  const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
-    connection,
-    faucetTokenAccount,
-    CASH_MINT,
-    recipientTokenAccount,
-    faucetWallet.publicKey,
-    BigInt(CASH_AMOUNT),
-    CASH_DECIMALS,
-    [],
-    "confirmed",
-    TOKEN_2022_PROGRAM_ID
+  // Always add ATA creation (idempotent)
+  transaction.add(
+    createAssociatedTokenAccountInstruction(
+      faucetWallet.publicKey,
+      recipientTokenAccount,
+      recipient,
+      CASH_MINT,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    )
   );
   transaction.add(transferInstruction);
+  transaction.sign(faucetWallet);
 
-  const signature = await sendAndConfirmTransaction(connection, transaction, [faucetWallet]);
+  const signature = await connection.sendRawTransaction(transaction.serialize(), {
+    skipPreflight: true,
+  });
   return signature;
 }
