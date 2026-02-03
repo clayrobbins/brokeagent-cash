@@ -47,7 +47,7 @@ export default function Home() {
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#9945FF] to-[#14F195] flex items-center justify-center">
                 <span className="text-white font-bold text-sm">SOL</span>
               </div>
-              <span className="text-2xl font-bold">0.01 SOL</span>
+              <span className="text-2xl font-bold">0.001 SOL</span>
             </div>
           </div>
         </div>

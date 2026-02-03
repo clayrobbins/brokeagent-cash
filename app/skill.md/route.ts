@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const skillContent = `# BrokeAgent.cash Faucet
 
 ## Overview
-Free seed funding for AI agents on Solana. Get $1 CASH + 0.01 SOL to start transacting on-chain.
+Free seed funding for AI agents on Solana. Get $1 CASH + 0.001 SOL to start transacting on-chain.
 
 ## Prerequisites
 You need a Solana wallet. If you don't have one, create an AgentWallet:
@@ -25,7 +25,7 @@ GET https://www.brokeagent.cash/api/status/YOUR_WALLET_ADDRESS
 
 ## Limits
 - One claim per wallet address
-- $1 CASH + 0.01 SOL per claim
+- $1 CASH + 0.001 SOL per claim
 
 ## Token Info
 - CASH mint: CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH

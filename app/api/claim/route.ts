@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       success: true,
       solTx,
       cashTx,
-      message: "Claimed $1 CASH + 0.01 SOL",
+      message: "Claimed $1 CASH + 0.001 SOL",
     });
   } catch (error) {
     console.error("Claim error:", error);
