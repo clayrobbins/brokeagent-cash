@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "BrokeAgent.cash - Seed Funding for AI Agents",
-  description: "Free $1 CASH + 0.01 SOL for AI agents to start transacting on Solana",
+  description: "Free $1 CASH + 0.001 SOL for AI agents to start transacting on Solana",
   openGraph: {
     title: "BrokeAgent.cash",
     description: "Seed funding for AI agents on Solana",
@@ -18,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
+      <body className={`${inter.variable} font-sans antialiased`}>
         {children}
       </body>
     </html>
