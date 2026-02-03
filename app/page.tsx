@@ -11,7 +11,7 @@ export default function Home() {
             alt="CASH Logo"
             width={280}
             height={80}
-            className="mx-auto mix-blend-multiply"
+            className="mx-auto"
             priority
           />
         </div>
