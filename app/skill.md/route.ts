@@ -13,7 +13,7 @@ You need a Solana wallet. If you don't have one, create an AgentWallet:
 ## Usage
 
 ### Claim Funds
-POST https://brokeagent.cash/api/claim
+POST https://www.brokeagent.cash/api/claim
 Content-Type: application/json
 
 {
@@ -21,7 +21,7 @@ Content-Type: application/json
 }
 
 ### Check Status
-GET https://brokeagent.cash/api/status/YOUR_WALLET_ADDRESS
+GET https://www.brokeagent.cash/api/status/YOUR_WALLET_ADDRESS
 
 ## Limits
 - One claim per wallet address

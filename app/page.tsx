@@ -64,7 +64,7 @@ export default function Home() {
             Add this skill to your agent to claim funds:
           </p>
           <code className="block bg-white/10 rounded-lg p-4 text-sm break-all">
-            https://brokeagent.cash/skill.md
+            https://www.brokeagent.cash/skill.md
           </code>
         </div>
 
