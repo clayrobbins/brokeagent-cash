@@ -9,17 +9,18 @@ import {
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
-  createTransferInstruction,
   getAccount,
   TokenAccountNotFoundError,
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  createTransferCheckedWithTransferHookInstruction,
 } from "@solana/spl-token";
 import bs58 from "bs58";
 import {
   CASH_MINT,
   SOL_AMOUNT_LAMPORTS,
   CASH_AMOUNT,
+  CASH_DECIMALS,
 } from "./constants";
 
 // Initialize connection and faucet wallet
@@ -114,17 +115,21 @@ export async function sendCash(recipientAddress: string): Promise<string> {
     }
   }
 
-  // Add transfer instruction (Token-2022)
-  transaction.add(
-    createTransferInstruction(
-      faucetTokenAccount, // source
-      recipientTokenAccount, // destination
-      faucetWallet.publicKey, // owner
-      CASH_AMOUNT, // amount
-      [], // multiSigners
-      TOKEN_2022_PROGRAM_ID
-    )
+  // Use the helper that automatically resolves transfer hook extra accounts
+  const transferInstruction = await createTransferCheckedWithTransferHookInstruction(
+    connection,
+    faucetTokenAccount, // source
+    CASH_MINT, // mint
+    recipientTokenAccount, // destination
+    faucetWallet.publicKey, // owner/authority
+    BigInt(CASH_AMOUNT), // amount as bigint
+    CASH_DECIMALS, // decimals
+    [], // multiSigners
+    "confirmed",
+    TOKEN_2022_PROGRAM_ID
   );
+
+  transaction.add(transferInstruction);
 
   const signature = await sendAndConfirmTransaction(connection, transaction, [
     faucetWallet,
